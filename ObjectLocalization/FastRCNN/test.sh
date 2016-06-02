@@ -29,7 +29,7 @@ if [ $rc -ne 0 ];then
 fi
 
 # get the top-1 misclass
-acc=`tail -n 2 output.dat | grep "accuracy" | sed "s/.*accuracy = //" | sed "s/ \%.*//"`
+acc=`tail -n 2 output.dat | grep "accuracy" | sed "s/.*accuracy = //" | sed "s/\%.*//"`
 
 pass=`echo $acc'>'53 | bc -l`
 

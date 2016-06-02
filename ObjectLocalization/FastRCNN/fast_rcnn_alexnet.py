@@ -46,7 +46,7 @@ Notes:
 import os
 
 from neon.backends import gen_backend
-from neon.data import PASCALVOC
+from neon.data import PASCALVOCTrain
 from neon.data.datasets import Dataset
 from neon.initializers import Gaussian, Constant
 from neon.transforms import (Rectlin, Softmax, Identity, CrossEntropyMulti,
@@ -125,7 +125,7 @@ if frcn_fine_tune is True:
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # setup training dataset
-train_set = PASCALVOC('trainval', '2007', path=args.data_dir, output_type=0,
+train_set = PASCALVOCTrain('trainval', '2007', path=args.data_dir, output_type=0,
                       n_mb=n_mb, img_per_batch=img_per_batch, rois_per_img=rois_per_img)
 
 # setup layers
@@ -204,6 +204,6 @@ if not args.test_only:
 
 print 'running eval on the training set...'
 metric_train = model.eval(train_set, metric=ObjectDetection())
-print 'Training set:\nlabel accuracy = {}%\nobject deteciton SmoothL1Loss = {}'.format(
+print 'Training set:\nlabel accuracy = {}%\nobject detection SmoothL1Loss = {}'.format(
     metric_train[0]*100,
     metric_train[1])
