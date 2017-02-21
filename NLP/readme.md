@@ -14,9 +14,9 @@ Weston, Jason, et al.
 arXiv preprint arXiv:1502.05698 (2015).
 ```
 
-### Sentiment classification
+## Sentiment classification
 
-## [IMDB](./IMDB)
+### [IMDB](./SentimentClassification/IMDB)
 
 LSTM model for solving the IMDB sentiment classification task.
 
