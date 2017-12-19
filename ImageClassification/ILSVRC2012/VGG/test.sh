@@ -22,7 +22,8 @@ WEIGHTS_FILE=${WEIGHTS_URL##*/}
 echo "Downloading weights file from ${WEIGHTS_URL}"
 curl -o $WEIGHTS_FILE $WEIGHTS_URL 2> /dev/null
 
-python -u vgg_neon.py --test_only -i ${EXECUTOR_NUMBER} -w /usr/local/data/I1K/macrobatches/ -vvv --model_file $WEIGHTS_FILE --no_progress_bar  -z 64 --vgg_version E | tee output.dat 2>&1
+python -u vgg_neon.py --test_only -i ${EXECUTOR_NUMBER} -w /data/i1k-extracted -vvv --manifest_root /data/i1k-extracted --manifest val:/data/i1k-extracted/val-index.csv --model_file $WEIGHTS_FILE --no_progress_bar -z 64 --vgg_version E 2>&1 | tee output.dat
+
 rc=$?
 if [ $rc -ne 0 ];then
     exit $rc

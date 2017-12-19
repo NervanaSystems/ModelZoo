@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import numpy as np
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Kaiming, IdentityInit
 from neon.layers import Conv, Pooling, GeneralizedCost, Affine, Activation
@@ -20,10 +21,49 @@ from neon.layers import MergeSum, SkipNode
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
-from neon.data import ImageLoader, ImageParams, DataLoader
 from neon.callbacks.callbacks import Callbacks
 
 import os
+
+from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
+from neon.data.aeon_shim import AeonDataLoader
+
+def wrap_dataloader(dl, dtype=np.float32):
+    dl = OneHot(dl, index=1, nclasses=10)
+    dl = TypeCast(dl, index=0, dtype=dtype)
+    dl = BGRMeanSubtract(dl, index=0)
+    return dl
+
+def config(manifest_filename, manifest_root, batch_size, subset_pct):
+    image_config = {"type": "image",
+                    "height": 32,
+                    "width": 32}
+    label_config = {"type": "label",
+                    "binary": False}
+    augmentation = {"type": "image",
+                    "crop_enable": True}
+
+    return {'manifest_filename': manifest_filename,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'subset_fraction': float(subset_pct/100.0),
+            'etl': [image_config, label_config],
+            'augmentation': [augmentation]}
+
+
+def make_train_config(manifest_filename, manifest_root, batch_size, subset_pct=100):
+    train_config = config(manifest_filename, manifest_root, batch_size, subset_pct)
+    train_config['augmentation'][0]['center'] = False
+    train_config['augmentation'][0]['flip_enable'] = True
+    train_config['shuffle_enable'] = True
+    train_config['shuffle_manifest'] = True
+
+    return wrap_dataloader(AeonDataLoader(train_config))
+
+
+def make_val_config(manifest_filename, manifest_root, batch_size, subset_pct=100):
+    val_config = config(manifest_filename, manifest_root, batch_size, subset_pct)
+    return wrap_dataloader(AeonDataLoader(val_config))
 
 # parse the command line arguments (generates the backend)
 parser = NeonArgparser(__doc__)
@@ -31,52 +71,9 @@ parser.add_argument('--depth', type=int, default=9,
                     help='depth of each stage (network depth will be 6n+2)')
 args = parser.parse_args()
 
-
-def extract_images(out_dir, padded_size):
-    '''
-    Save CIFAR-10 dataset as PNG files
-    '''
-    import numpy as np
-    from neon.data import load_cifar10
-    from PIL import Image
-    dataset = dict()
-    dataset['train'], dataset['val'], _ = load_cifar10(out_dir, normalize=False)
-    pad_size = (padded_size - 32) // 2 if padded_size > 32 else 0
-    pad_width = ((0, 0), (pad_size, pad_size), (pad_size, pad_size))
-
-    for setn in ('train', 'val'):
-        data, labels = dataset[setn]
-
-        img_dir = os.path.join(out_dir, setn)
-        ulabels = np.unique(labels)
-        for ulabel in ulabels:
-            subdir = os.path.join(img_dir, str(ulabel))
-            if not os.path.exists(subdir):
-                os.makedirs(subdir)
-
-        for idx in range(data.shape[0]):
-            im = np.pad(data[idx].reshape((3, 32, 32)), pad_width, mode='mean')
-            im = np.uint8(np.transpose(im, axes=[1, 2, 0]).copy())
-            im = Image.fromarray(im)
-            path = os.path.join(img_dir, str(labels[idx][0]), str(idx) + '.png')
-            im.save(path, format='PNG')
-
 # setup data provider
-train_dir = os.path.join(args.data_dir, 'train')
-test_dir = os.path.join(args.data_dir, 'val')
-if not (os.path.exists(train_dir) and os.path.exists(test_dir)):
-    extract_images(args.data_dir, 40)
-
-# setup data provider
-shape = dict(channel_count=3, height=32, width=32)
-train_params = ImageParams(center=False, flip=True, **shape)
-test_params = ImageParams(**shape)
-common = dict(target_size=1, nclasses=10)
-
-train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
-                   shuffle=True, **common)
-test = DataLoader(set_name='val', repo_dir=test_dir, media_params=test_params, **common)
-
+train = make_train_config(args.manifest['train'], args.manifest_root, args.batch_size)
+test = make_val_config(args.manifest['val'], args.manifest_root, args.batch_size)
 
 def conv_params(fsize, nfm, stride=1, relu=True):
     return dict(fshape=(fsize, fsize, nfm), strides=stride, padding=(1 if fsize > 1 else 0),

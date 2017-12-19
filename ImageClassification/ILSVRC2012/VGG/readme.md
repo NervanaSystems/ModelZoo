@@ -7,8 +7,8 @@ The model run script is included here [vgg_neon.py](./vgg_neon.py).  This script
 
 ### Trained weights
 The trained weights file can be downloaded from AWS using the following links:
-[VGG_D.p]( https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_D.p) and [VGG_E.p][S3_WEIGHTS_FILE].
-[S3_WEIGHTS_FILE]: https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_E.p
+[VGG_D.p]( https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_D_fused_conv_bias.p) and [VGG_E.p][S3_WEIGHTS_FILE].
+[S3_WEIGHTS_FILE]: https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_E_fused_conv_bias.p
 
 ## Performance
 
@@ -95,7 +95,7 @@ The batch size is set to 64 in the examples above because with larger batch size
 
 ### Version compatibility
 
-Neon version: commit SHA [e7ab2c2e2](https://github.com/NervanaSystems/neon/commit/e7ab2c2e27f113a4d36d17ba8c79546faed7d916).
+Neon version: v2.3.0 (https://github.com/NervanaSystems/neon/tree/v2.3.0).
 
 ## Citation
 

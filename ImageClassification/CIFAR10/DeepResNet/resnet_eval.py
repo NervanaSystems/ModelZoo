@@ -15,24 +15,50 @@
 # ----------------------------------------------------------------------------
 import os
 
+import numpy as np
 from neon.util.argparser import NeonArgparser
 from neon.util.persist import load_obj
 from neon.transforms import Misclassification, CrossEntropyMulti
 from neon.optimizers import GradientDescentMomentum
 from neon.layers import GeneralizedCost
 from neon.models import Model
-from neon.data import DataLoader, ImageParams
+
+from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
+from neon.data.aeon_shim import AeonDataLoader
 
 # parse the command line arguments (generates the backend)
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-# setup data provider
-test_dir = os.path.join(args.data_dir, 'val')
-shape = dict(channel_count=3, height=32, width=32)
-test_params = ImageParams(center=True, flip=False, **shape)
-common = dict(target_size=1, nclasses=10)
-test_set = DataLoader(set_name='val', repo_dir=test_dir, media_params=test_params, **common)
+def wrap_dataloader(dl, dtype=np.float32):
+    dl = OneHot(dl, index=1, nclasses=10)
+    dl = TypeCast(dl, index=0, dtype=dtype)
+    dl = BGRMeanSubtract(dl, index=0)
+    return dl
+
+def config(manifest_filename, manifest_root, batch_size, subset_pct):
+    image_config = {"type": "image",
+                    "height": 32,
+                    "width": 32}
+    label_config = {"type": "label",
+                    "binary": False}
+    augmentation = {"type": "image",
+                    "crop_enable": True,
+                    "center": True,
+                    "flip_enable": False}
+
+    return {'manifest_filename': manifest_filename,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'subset_fraction': float(subset_pct/100.0),
+            'etl': [image_config, label_config],
+            'augmentation': [augmentation]}
+
+def make_val_config(manifest_filename, manifest_root, batch_size, subset_pct=100):
+    val_config = config(manifest_filename, manifest_root, batch_size, subset_pct)
+    return wrap_dataloader(AeonDataLoader(val_config))
+
+test_set = make_val_config(args.manifest["val"], args.manifest_root, batch_size=args.batch_size)
 
 model = Model(load_obj(args.model_file))
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())

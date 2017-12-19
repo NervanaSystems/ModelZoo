@@ -18,6 +18,7 @@ Googlenet V1 implementation
 """
 
 import os
+import numpy as np
 
 from neon.util.argparser import NeonArgparser
 from neon.layers import Conv, Pooling, MergeBroadcast, BranchNode
@@ -28,7 +29,35 @@ from neon.backends import gen_backend
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
-from neon.data import ImageLoader
+
+from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
+from neon.data.aeon_shim import AeonDataLoader
+
+def wrap_dataloader(dl, dtype=np.float32):
+    dl = OneHot(dl, index=1, nclasses=1000)
+    dl = TypeCast(dl, index=0, dtype=dtype)
+    dl = BGRMeanSubtract(dl, index=0)
+    return dl
+
+def common_config(subset_pct, manifest_filename, manifest_root, batch_size):
+    image_config = {"type": "image",
+                    "height": 224,
+                    "width": 224}
+    label_config = {"type": "label",
+                    "binary": False}
+    augmentation = {"type": "image",
+                    "scale": [0.875, 0.875]}
+
+    return {'manifest_filename': manifest_filename,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'subset_fraction': float(subset_pct/100.0),
+            'etl': [image_config, label_config],
+            'augmentation': [augmentation]}
+
+def make_val_config(subset_pct, manifest_filename, manifest_root, batch_size):
+    val_config = common_config(subset_pct, manifest_filename, manifest_root, batch_size)
+    return wrap_dataloader(AeonDataLoader(val_config))
 
 parser = NeonArgparser(__doc__)
 parser.add_argument('--subset_pct', type=float, default=100,
@@ -38,10 +67,7 @@ parser.add_argument('--test_only', action='store_true',
 args = parser.parse_args()
 
 # setup data provider
-img_set_options = dict(repo_dir=args.data_dir, inner_size=224,
-                       subset_pct=args.subset_pct)
-test = ImageLoader(set_name='validation', scale_range=(256, 256),
-                   do_transforms=False, **img_set_options)
+val = make_val_config(args.subset_pct, args.manifest['val'], args.manifest_root, args.batch_size)
 
 init1 = Xavier(local=False)
 initx = Xavier(local=True)
@@ -122,16 +148,16 @@ cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
                  weights=[1, 0., 0.])  # We only want to consider the CE of the main path
 
 assert os.path.exists(args.model_file), 'script requires the trained weights file'
-model.load_params(args.model_file)
-model.initialize(test, cost)
+model.load_params(args.model_file, load_states=False)
+model.initialize(val, cost)
 
 
 print 'running speed benchmark...'
-model.benchmark(test, cost, opt)
+model.benchmark(val, cost, opt)
 
 print '\nCalculating performance on validation set...'
-test.reset()
-mets = model.eval(test, metric=valmetric)
+val.reset()
+mets = model.eval(val, metric=valmetric)
 print 'Validation set metrics:'
 print 'LogLoss: %.2f, Accuracy: %.1f %% (Top-1), %.1f %% (Top-5)' % (mets[0],
                                                                      (1.0-mets[1])*100,

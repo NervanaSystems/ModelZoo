@@ -27,15 +27,51 @@ To load a pretrained model and run it on the validation set:
     alexnet_neon.py -w <path-to-saved-batches> --test_only \
             --model_file <saved weights file>
 """
-
+import numpy as np
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Constant, Gaussian
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine, LRN
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
-from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
+
+from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
+from neon.data.aeon_shim import AeonDataLoader
+
+def wrap_dataloader(dl, dtype=np.float32):
+    dl = OneHot(dl, index=1, nclasses=1000)
+    dl = TypeCast(dl, index=0, dtype=dtype)
+    dl = BGRMeanSubtract(dl, index=0)
+    return dl
+
+def common_config(subset_pct, manifest_filename, manifest_root, batch_size):
+#    cache_root = get_data_cache_or_nothing('i1k-cache/')
+    image_config = {"type": "image",
+                    "height": 224,
+                    "width": 224}
+    label_config = {"type": "label",
+                    "binary": False}
+    augmentation = {"type": "image",
+                    "scale": [0.875, 0.875],
+                    "crop_enable": True}
+
+    return {'manifest_filename': manifest_filename,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'subset_fraction': float(subset_pct/100.0),
+            'etl': [image_config, label_config],
+            'augmentation': [augmentation]}
+
+def make_train_config(subset_pct, manifest_filename, manifest_root, batch_size):
+    train_config = common_config(subset_pct, manifest_filename, manifest_root, batch_size)
+    train_config['shuffle_enable'] = True
+    train_config['shuffle_manifest'] = True
+    return wrap_dataloader(AeonDataLoader(train_config))
+
+def make_val_config(subset_pct, manifest_filename, manifest_root, batch_size):
+    val_config = common_config(subset_pct, manifest_filename, manifest_root, batch_size)
+    return wrap_dataloader(AeonDataLoader(val_config))
 
 # parse the command line arguments (generates the backend)
 parser = NeonArgparser(__doc__)
@@ -49,14 +85,8 @@ if args.test_only:
     if args.model_file is None:
         raise ValueError('To test model, trained weights need to be provided')
 
-# setup data provider
-img_set_options = dict(repo_dir=args.data_dir,
-                       inner_size=224,
-                       subset_pct=args.subset_pct)
-train = ImageLoader(set_name='train', scale_range=(256, 256),
-                    shuffle=True, **img_set_options)
-test = ImageLoader(set_name='validation', scale_range=(256, 256),
-                   do_transforms=False, **img_set_options)
+train = make_train_config(args.subset_pct, args.manifest["train"], args.manifest_root, batch_size=args.batch_size)
+val = make_val_config(args.subset_pct, args.manifest["val"], args.manifest_root, batch_size=args.batch_size)
 
 init_g1 = Gaussian(scale=0.01)
 init_g2 = Gaussian(scale=0.005)
@@ -105,15 +135,15 @@ opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 
 # configure callbacks
 valmetric = TopKMisclassification(k=5)
-callbacks = Callbacks(model, eval_set=test, metric=valmetric, **args.callback_args)
+callbacks = Callbacks(model, eval_set=val, metric=valmetric, **args.callback_args)
 
 if args.model_file is not None:
-    model.load_params(args.model_file)
+    model.load_params(args.model_file, load_states=False)
 if not args.test_only:
     cost = GeneralizedCost(costfunc=CrossEntropyMulti())
     model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
-mets = model.eval(test, metric=valmetric)
+mets = model.eval(val, metric=valmetric)
 print 'Validation set metrics:'
 print 'LogLoss: %.2f, Accuracy: %.1f %% (Top-1), %.1f %% (Top-5)' % (mets[0],
                                                                      (1.0-mets[1])*100,

@@ -13,7 +13,7 @@ The trained weights file can be downloaded from AWS
 
 
 ### neon version
-The model weight file above has been generated using neon version tag [v1.4.0]((https://github.com/NervanaSystems/neon/releases/tag/v1.4.0).
+The model weight file above has been generated using neon version tag [v2.3.0]((https://github.com/NervanaSystems/neon/releases/tag/v2.3.0).
 It may not work with other versions.
 
 ### Performance

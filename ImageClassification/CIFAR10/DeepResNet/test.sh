@@ -23,14 +23,14 @@ WEIGHTS_FILE=${WEIGHTS_URL##*/}
 echo "Downloading weights file from ${WEIGHTS_URL}"
 curl -o $WEIGHTS_FILE $WEIGHTS_URL 2> /dev/null
 
-python -u $TEST_SCRIPT  -i ${EXECUTOR_NUMBER} -vvv --model_file $WEIGHTS_FILE --no_progress_bar -w /usr/local/data/CIFAR10/macrobatches | tee output.dat 2>&1
+python -u $TEST_SCRIPT  -i ${EXECUTOR_NUMBER} -vvv --model_file $WEIGHTS_FILE --manifest val:/data/CIFAR/val-index.csv --manifest_root /data/CIFAR -b gpu -z 32 --no_progress_bar 2>&1 | tee output.dat
 rc=$?
 if [ $rc -ne 0 ];then
     exit $rc
 fi
 
 # get the top-1 misclass
-top1=`tail -n 1 output.dat | sed "s/.*Accuracy: //" | sed "s/ \% (Top-1).*//"`
+top1=`cat output.dat | sed -n "s/.*Accuracy: \(.*\) \% (Top-1).*/\1/p"`
 
 top1pass=0
 top1pass=`echo $top1'>'85 | bc -l`

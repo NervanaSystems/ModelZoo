@@ -24,10 +24,10 @@ Training this model with the options described below should be able to achieve a
 accuracy using only mean subtraction, random cropping, and random flips.
 
 ## Instructions
-This script was tested with [neon version 1.5.0](https://github.com/NervanaSystems/neon/tree/v1.5.0).
+This script was tested with [neon version 2.2.0](https://github.com/NervanaSystems/neon/tree/v2.2.0).
 Make sure that your local repo is synced to this commit and run the [installation
 procedure](http://neon.nervanasys.com/docs/latest/installation.html) before proceeding.
-Commit SHA for v1.5.0 is  `8a5b2c45784499cd3aba3c322ea10b3661c2a2a9`
+Commit SHA for v2.2.0 is  `5843e7116d880dfc59c8fb558beb58dd2ef421d0`
 
 This example uses the `DataLoader` module to load the images for consumption while applying random
 cropping, flipping, and shuffling.  To use the DataLoader, the script will generate PNG files from
