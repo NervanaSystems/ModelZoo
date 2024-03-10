@@ -22,14 +22,12 @@ Based on manuscript:
 """
 
 from neon.util.argparser import NeonArgparser
-from neon.backends import gen_backend
 from neon.initializers import Constant, GlorotUniform, Xavier
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
-from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
-from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
+from imagenet_data import make_train_loader, make_validation_loader
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -41,12 +39,6 @@ parser.add_argument('--test_only', action='store_true',
                     help='skip fitting - evaluate metrics on trained model weights')
 args = parser.parse_args()
 
-img_set_options = dict(repo_dir=args.data_dir, inner_size=224,
-                       subset_pct=args.subset_pct)
-train = ImageLoader(set_name='train', scale_range=(256, 384),
-                    shuffle=True, **img_set_options)
-test = ImageLoader(set_name='validation', scale_range=(256, 256), do_transforms=False,
-                   shuffle=False, **img_set_options)
 
 init1 = Xavier(local=True)
 initfc = GlorotUniform()
@@ -81,13 +73,21 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 
 model = Model(layers=layers)
 
+# setup data provider
+assert 'train' in args.manifest, "Missing train manifest"
+assert 'val' in args.manifest, "Missing validation manifest"
+rseed = 0 if args.rng_seed is None else args.rng_seed
+train = make_train_loader(args.manifest['train'],
+                          args.manifest_root, model.be, args.subset_pct, rseed)
+test = make_validation_loader(args.manifest['val'], args.manifest_root, model.be, args.subset_pct)
+
 # configure callbacks
 top5 = TopKMisclassification(k=5)
 callbacks = Callbacks(model, eval_set=test, metric=top5, **args.callback_args)
 
 model.load_params(args.model_file)
-mets=model.eval(test, metric=TopKMisclassification(k=5))
+mets = model.eval(test, metric=TopKMisclassification(k=5))
 print 'Validation set metrics:'
 print 'LogLoss: %.2f, Accuracy: %.1f %% (Top-1), %.1f %% (Top-5)' % (mets[0],
-                                                                    (1.0-mets[1])*100,
-                                                                    (1.0-mets[2])*100)
+                                                                     (1.0-mets[1])*100,
+                                                                     (1.0-mets[2])*100)

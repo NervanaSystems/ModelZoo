@@ -1,14 +1,19 @@
+#Overview
+
+This example VGG directory contains scripts to perform VGG training and inference using MKL backend and GPU backend
+
 ##Model
 
-Here we have ported the weights for the 16 and 19 layer VGG models from the Caffe model zoo (see [link](https://github.com/BVLC/caffe/wiki/Model-Zoo#models-used-by-the-vgg-team-in-ilsvrc-2014))
+Here we have ported the weights for the 16 and 19 layer VGG models from the Caffe model zoo (see [link](https://github.com/BVLC/caffe/wiki/Model-Zoo#models-used-by-the-vgg-team-in-ilsvrc-2014)): https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_D_fused_conv_bias.p for VGG_D and https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_E_fused_conv_bias.p for VGG_E
 
 ### Model script
-The model run script is included here [vgg_neon.py](./vgg_neon.py).  This script can easily be adapted for fine tuning this network but we have focused on inference here because a successful training protocol may require details beyond what is available from the Caffe model zoo.
+The model run scripts included here [vgg_neon_train.py] (./vgg_neon_train.py) and [vgg_neon_inference.py] (./vgg_neon_inference.py) perform training and inference respectively.  We are providing both the training and the inference script, they can be adapted for fine tuning this network but we have yet to test the training script because a successful training protocol may require details beyond what is available from the Caffe model zoo. The inference script will take the trained weight file as input: supply it with the VGG_D_fused_conv_bias.p or VGG_E_fused_conv_bias.p or trained models from running VGG training.
 
 ### Trained weights
 The trained weights file can be downloaded from AWS using the following links:
-[VGG_D.p]( https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_D.p) and [VGG_E.p][S3_WEIGHTS_FILE].
-[S3_WEIGHTS_FILE]: https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_E.p
+[VGG_D_fused_conv_bias.p](https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_D_fused_conv_bias.p)
+[VGG_E_fused_conv_bias.p](https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/VGG_E_fused_conv_bias.p)
+
 
 ## Performance
 
@@ -27,75 +32,57 @@ Testing the image classification performance for the two models on the ILSVRC 20
 
 These results are calculated using a single scale, using a 224x224 crop of each image.  These results are comparable to the classification accuracy we computed using the Caffe model zoo 16 and 19 layer VGG models using Caffe [Caffe model zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo#models-used-by-the-vgg-team-in-ilsvrc-2014).
 
+## Instructions 
 
-
-
-### Speed
-
-We ran speed benchmarks on this model using neon.  These results are using a 64 image batch size with 3x224x224 input images.  The results are in the tables below:
-
-#### VGG D
-```
- ----------------------
-|    Func  |    Time   |
- ----------------------
-| fprop    |   366 ms  |
-| bprop    |   767 ms  |
-| update   |    19 ms  |
- ----------------------
-| Total    |  1152 ms  |
- ----------------------
-```
-
-#### VGG E
-```
- -----------------------
-|    Func  |    Time    |
- -----------------------
-| fprop    |    452 ms  |
-| bprop    |    940 ms  | 
-| update   |     20 ms  |
- -----------------------
-| Total    |   1412 ms  |
- -----------------------
-```
-The run times for the fprop and bprop pass and the parameter update are given in the table below. The iteration row is the combined runtime for all functions in a training iteration. These results are for each minibatch consisting of 64 images of shape 224x224x3. The model was run 12 times, the first two passes were ignored and the last 10 were used to get the benchmark results.
-
-
-
-System specs:
-```
-Intel(R) Core(TM) i5-4690 CPU @ 3.50GHz
-Ubunutu 14.04
-GPU: GeForce GTX TITAN X
-CUDA Driver Version 7.0
-```
-
-## Instructions
-
-Make sure that your local repo is synced to the proper neon repo commit (see version below) and run the [installation procedure](http://neon.nervanasys.com/docs/latest/installation.html) before proceeding.  To run
-this model script on the ILSVRC2012 dataset, you will need to have the data in the neon macrobatch format; follow
-the instructions in the neon documentations for [setting up the data sets](http://neon.nervanasys.com/docs/latest/datasets.html#imagenet).
+To run this model script on the ILSVRC2012 dataset, you will need to have the data in the neon aeon format; follow
+the instructions in the neon/example/imagenet/README.md to setup the dataset.
 
 If neon is installed into a `virtualenv`, make sure that it is activated before running the commands below.
 
-To run the evaluation of the model:
-```
-# for 16 layer VGG D model
-python vgg_neon.py --vgg_ver D --model_file VGG_D.p -w path/to/dataset/batches -z 64 --caffe
+### Training 
 
-# for 16 layer VGG D model
-python vgg_neon.py --vgg_ver E --model_file VGG_E.p -w path/to/dataset/batches -z 64 --caffe
+To run the training of VGG with MKL backend: 
+
+python -u vgg_neon_train.py  -c vgg_mkl.cfg    -vvv  --save_path VGG16-model.prm --output_file VGG16-data.h5   --caffe
+
+"numactl -i all" is our recommendation to get as much performance as possible for Intel architecture-based servers which
+feature multiple sockets and when NUMA is enabled. On such systems, please run the following:
+
+numactl -i all python -u vgg_neon_train.py  -c vgg_mkl.cfg    -vvv  --save_path VGG16-model.prm --output_file VGG16-data.h5   --caffe
+
+vgg_mkl.cfg is an example configuration file where it describes the above generated dataset and also the other parameters.
+
+```
+manifest = [train:/data/I1K/i1k-extracted/train-index.csv, val:/data/I1K/i1k-extracted/val-index.csv]
+manifest_root = //data/I1K/i1k-extracted/
+backend = mkl
+verbose = True
+epochs = 150
+batch_size = 64
+eval_freq = 1
+datatype = f32
 ```
 
+To run the training of VGG with GPU backend:
+modify the above vgg_mkl.cfg 'backend' entry or simply using the following command: 
+
+python -u vgg_neon_train.py  -c vgg_mkl.cfg -b gpu -vvv  --save_path VGG16-model.prm --output_file VGG16-data.h5   --caffe
+
+To run the evaluation/inference of the model:
+```
+# for 16 layer VGG D model 
+python vgg_neon_inference.py  -c vgg_mkl.cfg  --vgg_ver D --model_file VGG16-model.prm  -z 64 --caffe
+
+# for 16 layer VGG E model
+python vgg_neon_inference.py  -c vgg_mkl.cfg  --vgg_ver E --model_file VGG19-model.prm  -z 64 --caffe
+```
 Note that the `--caffe` option is needed to match the dropout implementation used by Caffe.
-
-The batch size is set to 64 in the examples above because with larger batch size the model may not fit on some GPUs.  Use smaller batch sizes if necessary.  The script given here can easily be altered for model fine tuning.  See the neon user manual for help with that.
+Please note that VGG16.prm and VGG19.prm could be the ported weights VGG_D_fused_conv_bias.p and VGG_E_fused_conv_bias.p
 
 
 ### Version compatibility
 
-Neon version: commit SHA [e7ab2c2e2](https://github.com/NervanaSystems/neon/commit/e7ab2c2e27f113a4d36d17ba8c79546faed7d916).
+Neon version: neon v2.3
 
 ## Citation
 
